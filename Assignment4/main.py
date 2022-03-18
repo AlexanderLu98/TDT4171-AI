@@ -136,7 +136,7 @@ def main():
     tree = Digraph(filename="Decision_tree_learning.dot")
 
     #learn the model
-    model = learn_decision_tree(train, train.columns, tree, randomized=True)[1]
+    model = learn_decision_tree(train, train.columns, tree, randomized=False)[1]
 
     #draw the tree
     tree.render(view=True)
