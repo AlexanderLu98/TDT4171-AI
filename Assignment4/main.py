@@ -13,7 +13,10 @@ def B(q):
     else:
         return -(q*np.log2(q) + (1-q)*np.log2(1-q))
 
-def remainder(target_value, A, p, n, examples):
+def remainder(target_value, A, examples):
+    _, counts = np.unique(examples, return_counts=True)
+    p = counts[0]
+    n = counts[1]
 
     distinct_vals = examples[A].unique()
     splits = []
@@ -31,24 +34,13 @@ def remainder(target_value, A, p, n, examples):
         except:
             nk = 0
         sum += ((pk + nk)/(p + n)) * B(pk/(pk + nk))
-    return sum
+    return sum, p, n
 
 def importance(target_value, A, examples):
-    """calculates the expected reduction in entropy from the test on A
-    Args:
-        tar: target attribute
-        A: the attribute we are testing on
-        examples: our dataset
-        rand (bool, optional): whether or not to use random importance. Defaults to False.
-    Returns:
-        the expected reduction in entropy
-    """
-    #p. 1223 in the book
-    #the information gain from the attribute test on A is the expected reduction in entropy
-    #positive
-    p = examples[target_value].value_counts()[1]
-    n = examples[target_value].value_counts()[2]
-    return B(p/(p+n)) - remainder(target_value, A, p, n, examples)
+    temp = remainder(target_value, A, examples)
+
+    #B(p/p+n) − Remainder(A)
+    return B(temp[1]/(temp[1]+temp[2])) - temp[0]
 
 def get_id():
     #return a uniqiue ID
@@ -69,6 +61,7 @@ def same_classification(e: pd.Series, tree: Digraph):
     return [id, str(classificaion)]
 
 def learn_decision_tree(examples, attributes, tree, parent_examples=()):
+
 
     if examples.empty:
         return plurality_values(parent_examples,tree)
