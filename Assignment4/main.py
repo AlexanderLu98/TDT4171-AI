@@ -1,4 +1,5 @@
 
+import random
 import numpy as np
 import pandas as pd
 from graphviz import Digraph
@@ -6,91 +7,102 @@ import uuid
 
 target_value = '1.5'
 
-def B(q):
-    #Returns entropy of a Boolean random variable that is true with probability 
+#Returns entropy of a Boolean random variable that is true with probability
+def B(q): 
     if q ==1 or q == 0:
         return 0
     else:
         return -(q*np.log2(q) + (1-q)*np.log2(1-q))
 
+#Remainder as shown in the curriculum book
 def remainder(target_value, A, examples):
+    #Finding p and n
     _, counts = np.unique(examples, return_counts=True)
     p = counts[0]
     n = counts[1]
 
+    #Finding p_k and n_k
     distinct_vals = examples[A].unique()
-    splits = []
+    temp = []
     for val in distinct_vals:
-        splits.append(examples[examples[A] == val])
+        temp.append(examples[examples[A] == val])
 
     sum = 0
-    for split in splits:
+    for element in temp:
         try:
-            pk = split[target_value].value_counts()[1]
+            p_k = element[target_value].value_counts()[1]
         except:
-            pk = 0
+            p_k = 0
         try:
-            nk = split[target_value].value_counts()[2]
+            n_k = element[target_value].value_counts()[2]
         except:
-            nk = 0
-        sum += ((pk + nk)/(p + n)) * B(pk/(pk + nk))
+            n_k = 0
+        sum += ((p_k + n_k)/(p + n)) * B(p_k/(p_k + n_k))
     return sum, p, n
 
-def importance(target_value, A, examples):
+#Measure importance, using the notion of information gain, which is defined in terms of entropy
+def importance(target_value, A, examples, randomized=False):
+    #If randomized this will return a random value between 0 and 1
+    if randomized: 
+        return random.uniform(0,1) 
     temp = remainder(target_value, A, examples)
 
-    #B(p/p+n) − Remainder(A)
+    #If not randomized it will return B(p/p+n) − Remainder(A)
     return B(temp[1]/(temp[1]+temp[2])) - temp[0]
 
 def get_id():
     #return a uniqiue ID
     return str(uuid.uuid4())
 
+#Helper method to find the pluarlity values
 def plurality_values(e, tree):
-    #return the most common value
     value = e[target_value].mode()[0]
     id = get_id()
     tree.node(id, label = str(value))
     return [id, str(value)]
 
+#Helper method for ldt function
 def same_classification(e: pd.Series, tree: Digraph):
-    #return the classification
     classificaion = e.unique()[0]
     id = get_id()
     tree.node(id, label = str(classificaion))
     return [id, str(classificaion)]
 
-def learn_decision_tree(examples, attributes, tree, parent_examples=()):
-
-
+#Learns the decision tree. This is the main function
+def learn_decision_tree(examples, attributes, tree, parent_examples=(), randomized = False):
+    #If examples is empty then return plurality-values(parent_examples)
     if examples.empty:
         return plurality_values(parent_examples,tree)
-
+    #Else if all examples have the same classification then return the classification
     elif len(examples[target_value].unique()) == 1:
         return same_classification(examples[target_value], tree)
-
+    #Else if attributes is empty then return plurality-value(examples)
     elif attributes.empty:
         return plurality_values(examples,tree)
     
     #find the most important attribute
     else:
-        model = {} #store the model
-        gain = {} #information gain
+        model = {}
+        information_gain = {}
         for col in attributes:
-            gain[col] = importance(target_value, col, examples)
+            information_gain[col] = importance(target_value, col, examples, randomized)
         
-        max_list = sorted(gain.items(), key=lambda x: x[1], reverse=True)
+        #Finds the A with the highest information gain
+        max_list = sorted(information_gain.items(), key=lambda x: x[1], reverse=True)
         max_list = list(filter(lambda x: x[0] != '1.5', max_list))
         A = max_list[0][0]
         id = get_id()
+        #tree<- a new decision tree with root test A
         tree.node(id, label=A)
-        subtree_dict = {} #used to the subtree under each v
+        subtree_dict = {}
         for v in examples[A].unique():
             exs = examples[examples[A]==v]
-            new_attrs = attributes.copy().drop(A)
-            subtree = learn_decision_tree(exs, new_attrs, tree, examples)
+            new_attributes = attributes.copy().drop(A)
+            #subtree<-Learn_decision_tree(exs, new attributes-A,examples)
+            subtree = learn_decision_tree(exs, new_attributes, tree, examples)
+            #Adds a branch to tree with label (A = v) and subtree
             tree.edge(id, subtree[0], label=str(v))
-            subtree_dict[v] = subtree[1] #add the subtree under v
+            subtree_dict[v] = subtree[1]
         
         model[A] = subtree_dict
         return [id, model]
@@ -104,17 +116,17 @@ def traverse(dict, row):
         next = row.loc[key]
     return traverse(dict[key][next], row)
 
-def tester(test,res):
-    correct = 0 
-    wrong = 0
+def tester(test,model):
+    y = 0 
+    n = 0
     for _, row in test.iterrows():
-        prediction = traverse(res, row)
+        prediction = traverse(model, row)
 
         if prediction == str(row.loc['1.4']):
-            correct += 1
+            y += 1
         else:
-            wrong += 1
-    print(f"\nModel predicted {correct} correct and {wrong} wrong. \nAccuracy = {round(correct/(correct+wrong),3)}")
+            n += 1
+    print(f"\nThis model predicted {y} correct and {n} wrong. \nThis equals an accuracy = {round(y/(y+n),3)}")
 
 def main():
     train = pd.read_csv("Assignment4/train.csv")
@@ -124,11 +136,11 @@ def main():
     tree = Digraph(filename="Decision_tree_learning.dot")
 
     #learn the model
-    res = learn_decision_tree(train, train.columns, tree)[1]
+    model = learn_decision_tree(train, train.columns, tree, randomized=True)[1]
 
     #draw the tree
     tree.render(view=True)
-    tester(test, res)
+    tester(test, model)
     
 
 
